@@ -6,6 +6,48 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(dplyr)
 ```
+
+# Problem 1
+## NYC Transit Data
+
+Read and clean the data, retaining the following variables:
+
+* Line
+* Station Name
+* Station Latitude and Longitude
+* Routes Served
+* Entry
+* Vending
+* Entrance Type
+* ADA Compliance
+
+```{r import_subway_data}
+transit_df = 
+  read_csv("data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv",
+           na = c("NA", " ", "")) |> 
+  janitor::clean_names() |> 
+  select(line, starts_with("station"), -station_location, 
+         starts_with("route"), entry, vending, entrance_type, ada) |> 
+  mutate(
+    entry = case_match(
+      entry,
+      "YES" ~ TRUE,
+      "NO" ~ FALSE,
+    ))
+  
+view(transit_df)
+```
+
+
+
+
+
+
+
+
+
 
