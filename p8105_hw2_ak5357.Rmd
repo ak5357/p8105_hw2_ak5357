@@ -110,23 +110,109 @@ Here are some more interesting facts about the data:
 ### _Mr. Trash Wheel_
 
 **Loading and cleaning the data.**
-```{r import_trashwheel_data, eval = FALSE}
 
-read_excel("data/202309 Trash Wheel Collection Data.xlsx",
-           sheet = "Mr. Trash Wheel"
-           na = c("NA", " ", ""),
-           skip = 1
-           ) |> 
-  janitor::clean_names()
+Writing a function below to read an excel sheet into a dataframe, given the parameters `filepath` and `sheet_name`. The default for the `sheet_name` parameter is `NULL`, in case I want to use the function on an excel with only one sheet. 
+
+I decided to use a function to read in the trash wheels' data to minimize errors by avoiding redundant code and to standardize the loading/cleaning process across all trash wheels' excel sheets.
+
+```{r read_excel_sheet_function}
+sheet_to_df = function(filepath, sheet_name=NULL){
+  output = read_excel(
+                    path = filepath,
+                    sheet = sheet_name,
+                    na = c("NA", " ", ""),
+                    skip = 1,
+                    trim_ws = TRUE
+                    ) |> 
+    janitor::clean_names() |> #clean column names
+    select(where(~ any(!is.na(.)))) #remove any columns with only NA values
   
+  return(output)
+}
+```
+
+
+I'm choosing to handle the alteration, removal, and addition of specific columns outside of the `sheet_to_df` function to keep the function as minimal and generalizable as possible.
+
+```{r load_trash_wheels_data, message = FALSE}
+# Assigning trash wheel excel filepath to variable, since it will be used repeatedly
+trash_excel_filepath = "data/202309 Trash Wheel Collection Data.xlsx"
+
+# Mr. Trash Wheel
+mr_trash_df = sheet_to_df(trash_excel_filepath, "Mr. Trash Wheel") |>
+  select(-homes_powered) |> #remove non-dumpster-related columns
+  mutate(
+    sports_balls = as.integer(sports_balls), #round sports balls column
+    year = as.numeric(year), #ensure the year data type is dbl
+    wheel_name = "Mr. Trash Wheel" #add name column
+    )
+
+# Professor Trash Wheel
+professor_trash_df = sheet_to_df(trash_excel_filepath, "Professor Trash Wheel") |>
+  select(-homes_powered) |> #remove non-dumpster-related columns
+  mutate(
+    wheel_name = "Professor Trash Wheel" #add name column
+  )
+
+# Gwynnda Trash Wheel
+gwynnda_trash_df = sheet_to_df(trash_excel_filepath, "Gwynnda Trash Wheel") |>
+  select(-homes_powered) |> #remove non-dumpster-related columns
+  mutate(
+    wheel_name = "Gwynnda Trash Wheel" #add name column
+  )
+
+```
+
+
+**Combining the Trash Wheel dataframes.**
+```{r combine_trash_dfs}
+trash_wheels_df = 
+  bind_rows(mr_trash_df, professor_trash_df, gwynnda_trash_df) |> 
+  relocate(wheel_name)
+```
+
+
+**Answering questions with data.**
+```{r}
+# Number of total observations
+n_total_observations = nrow(trash_wheels_df)
+
+# Number of observations from each wheel
+n_mr_trash_observations = trash_wheels_df |> 
+  filter(wheel_name == "Mr. Trash Wheel") |> 
+  nrow()
+
+n_professor_observations = trash_wheels_df |> 
+  filter(wheel_name == "Professor Trash Wheel") |> 
+  nrow()
+
+n_gwynnda_observations = trash_wheels_df |> 
+  filter(wheel_name == "Gwynnda Trash Wheel") |> 
+  nrow()
+
+#
+
+trash_wheels_df |> colnames()
+
+mr_trash_df |>  colnames()
+gwynnda_trash_df |> colnames()
+professor_trash_df |> colnames()
+
+trash_wheels_df |> 
+  group_by(wheel_name) |> 
+  summarise(
+    sum_vol = sum(volume_cubic_yards, na.rm = TRUE),
+    sum_weight = sum(weight_tons, na.rm = TRUE),
+    max_vol = max(volume_cubic_yards, na.rm = TRUE),
+    max_weight = max(weight_tons, na.rm = TRUE)
+  )
 
 
 ```
 
 
 
-
-
+The resulting dataset contains **`r nrow(trash_wheels_df)`** observations--
 
 
 
