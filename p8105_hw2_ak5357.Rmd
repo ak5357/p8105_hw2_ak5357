@@ -12,9 +12,9 @@ library(dplyr)
 ```
 
 # Problem 1
-## NYC Transit Data
+### _NYC Transit Data_
 
-Read and clean the data, retaining the following variables:
+**Loading and cleaning the data, keeping only the following variables:**
 
 * Line
 * Station Name
@@ -25,21 +25,102 @@ Read and clean the data, retaining the following variables:
 * Entrance Type
 * ADA Compliance
 
-```{r import_subway_data}
+```{r import_subway_data, message = FALSE}
 transit_df = 
-  read_csv("data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv",
-           na = c("NA", " ", "")) |> 
-  janitor::clean_names() |> 
-  select(line, starts_with("station"), -station_location, 
+  read_csv("data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv", #load data
+           na = c("NA", " ", "")) |> #define possible NA values
+  janitor::clean_names() |> #standardize column names
+  select(line, starts_with("station"), -station_location, #select focus columns
          starts_with("route"), entry, vending, entrance_type, ada) |> 
   mutate(
-    entry = case_match(
+    entry = case_match( #convert entry column from char to lgl
       entry,
       "YES" ~ TRUE,
       "NO" ~ FALSE,
+    )) |> 
+  mutate( #ensure all route columns are char type for consistency
+    across(
+      starts_with("route"), as.character
     ))
+```
+
+The dataset contains information related to each entrance and exit for each subway station in New York City.
+
+(Dear Reader: After much consideration, I have come to a difficult decision... Since this question doesn't count for points, I will forego further explanation about the dataset's variables. My sincere apologies. _tips hat_)
+
+The data are not tidy, since there is significant redundance among the columns, specifically those related to the routes.
+
+
+**Answering questions with data.**
+```{r data_questions}
+num_distinct_stations = transit_df |> 
+  distinct(line, station_name) |> 
+  nrow()
+
+num_ada_stations = transit_df |> 
+  filter(ada == TRUE) |> 
+  nrow()
+
+p_no_vending_yes_entry = transit_df |> 
+  summarize(
+    proportion = mean(vending == "NO" & entry == TRUE)
+    ) |> 
+  round(4)
+```
+
+Here are some interesting facts about the data:
+
+* The dataset contains information about **`r num_distinct_stations`** distinct stations.
+* Of the `r nrow(transit_df)` entrances and exists documented in the dataset, only **`r num_ada_stations`** are ADA compliant.
+* The proportion of station entrances / exits without vending that allow entrance is **`r p_no_vending_yes_entry`**, or **`r p_no_vending_yes_entry * 100`**%.
+
+**Reformatting data so that route number and route name are distinct variables.**
+```{r reformat_df_by_route}
+transit_dr_by_route = transit_df |> 
+  pivot_longer(
+    cols = starts_with("route"),
+    names_to = "route_number",
+    values_to = "route_name",
+    names_prefix = "route"
+  ) |> 
+  filter(!is.na(route_name))
+```
+
+
+**Answering more questions with data.**
+```{r _distinct_A_stations}
+n_distinct_A_stations = transit_dr_by_route |> 
+  filter(route_name == "A")  |> 
+  distinct(line, station_name) |> 
+  nrow()
+
+n_ada_A_stations = transit_dr_by_route |> 
+  filter(route_name == "A" & ada == TRUE) |> 
+  distinct(line, station_name) |> 
+  nrow()
+```
+
+Here are some more interesting facts about the data:
+
+* There are **`r n_distinct_A_stations`** distinct stations that serve the A train.
+* Of the stations that serve the A train, only **`r n_ada_A_stations`** are ADA compliant.
+
+
+# Problem 2
+### _Mr. Trash Wheel_
+
+**Loading and cleaning the data.**
+```{r import_trashwheel_data, eval = FALSE}
+
+read_excel("data/202309 Trash Wheel Collection Data.xlsx",
+           sheet = "Mr. Trash Wheel"
+           na = c("NA", " ", ""),
+           skip = 1
+           ) |> 
+  janitor::clean_names()
   
-view(transit_df)
+
+
 ```
 
 
