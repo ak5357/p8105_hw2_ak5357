@@ -218,3 +218,41 @@ The resulting dataset contains **`r nrow(trash_wheels_df)`** observations--
 
 
 
+# Problem 3
+### _Great British Bake Off_
+
+**Loading and cleaning the data.**
+````{r import_gbb_data}
+bakers_df = read_csv("data/gbb_datasets/bakers.csv") |> 
+  janitor::clean_names()
+
+bakes_df = read_csv("data/gbb_datasets/bakes.csv") |> 
+  janitor::clean_names()
+
+results_df = read_csv("data/gbb_datasets/results.csv", skip = 2) |> 
+  janitor::clean_names()
+
+viewers_df = read_csv("data/gbb_datasets/viewers.csv") |> 
+  janitor::clean_names()
+
+
+bakers_df |> colnames()
+bakes_df |> colnames()
+results_df |> colnames()
+viewers_df |> colnames()
+
+
+viewers_df |> 
+  pivot_longer(
+    
+  )
+
+
+
+
+```
+
+
+
+
+
