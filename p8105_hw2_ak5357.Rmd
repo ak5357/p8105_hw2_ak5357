@@ -44,23 +44,21 @@ transit_df =
     ))
 ```
 
-The dataset contains information related to each entrance and exit for each subway station in New York City.
-
-(Dear Reader: After much consideration, I have come to a difficult decision... Since this question doesn't count for points, I will forego further explanation about the dataset's variables. My sincere apologies. _tips hat_)
-
-The data are not tidy, since there is significant redundance among the columns, specifically those related to the routes.
-
+The dataset contains information related to each entrance and exit for each subway station in New York City. (Since this question doesn't count for points, I will forego further explanation about the dataset's variables. Sorry <3) The data are not tidy, since there is significant redundance among the columns, specifically those related to the routes.
 
 **Answering questions with data.**
 ```{r data_questions}
+# How many distinct stations?
 num_distinct_stations = transit_df |> 
   distinct(line, station_name) |> 
   nrow()
 
-num_ada_stations = transit_df |> 
+# How many ADA stations?
+num_ada_entr_ext = transit_df |>
   filter(ada == TRUE) |> 
   nrow()
 
+# How many entrances/exits without vending and with entry?
 p_no_vending_yes_entry = transit_df |> 
   summarize(
     proportion = mean(vending == "NO" & entry == TRUE)
@@ -71,8 +69,8 @@ p_no_vending_yes_entry = transit_df |>
 Here are some interesting facts about the data:
 
 * The dataset contains information about **`r num_distinct_stations`** distinct stations.
-* Of the `r nrow(transit_df)` entrances and exists documented in the dataset, only **`r num_ada_stations`** are ADA compliant.
-* The proportion of station entrances / exits without vending that allow entrance is **`r p_no_vending_yes_entry`**, or **`r p_no_vending_yes_entry * 100`**%.
+* Of the `r nrow(transit_df)` entrances and exists documented in the dataset, only **`r num_ada_entr_ext`** are ADA compliant.
+* The proportion of station entrances and exits without vending that allow entrance is **`r p_no_vending_yes_entry`**, or **`r p_no_vending_yes_entry * 100`**%.
 
 **Reformatting data so that route number and route name are distinct variables.**
 ```{r reformat_df_by_route}
@@ -89,11 +87,13 @@ transit_dr_by_route = transit_df |>
 
 **Answering more questions with data.**
 ```{r _distinct_A_stations}
+# How many distinct stations serve the A-line?
 n_distinct_A_stations = transit_dr_by_route |> 
   filter(route_name == "A")  |> 
   distinct(line, station_name) |> 
   nrow()
 
+# How many A-line stations are ADA compliant?
 n_ada_A_stations = transit_dr_by_route |> 
   filter(route_name == "A" & ada == TRUE) |> 
   distinct(line, station_name) |> 
@@ -135,7 +135,8 @@ sheet_to_df = function(filepath, sheet_name=NULL){
 I'm choosing to handle the alteration, removal, and addition of specific columns outside of the `sheet_to_df` function to keep the function as minimal and generalizable as possible.
 
 ```{r load_trash_wheels_data, message = FALSE}
-# Assigning trash wheel excel filepath to variable, since it will be used repeatedly
+# Assigning trash wheel excel filepath to variable
+# since it will be used repeatedly
 trash_excel_filepath = "data/202309 Trash Wheel Collection Data.xlsx"
 
 # Mr. Trash Wheel
@@ -168,7 +169,7 @@ gwynnda_trash_df = sheet_to_df(trash_excel_filepath, "Gwynnda Trash Wheel") |>
 ```{r combine_trash_dfs}
 trash_wheels_df = 
   bind_rows(mr_trash_df, professor_trash_df, gwynnda_trash_df) |> 
-  relocate(wheel_name)
+  relocate(wheel_name) #put wheel name column at the front
 ```
 
 
@@ -227,7 +228,7 @@ Information about individual bakers, their bakes, and their performance is inclu
 
 First, let's import the datasets.
 
-```{r import_gbb_data}
+```{r import_gbb_data, message = FALSE}
 # Bakers data
 bakers_df =
   read_csv("data/gbb_datasets/bakers.csv",
@@ -252,7 +253,7 @@ results_df =
 ```
 
 
-First, let's take a quick look at each dataframe.
+Now let's take a quick look at each dataframe.
 ```{r view_gbb_dfs, eval = FALSE}
 # View each table
 bakers_df |> view()
@@ -260,6 +261,116 @@ bakes_df |> view()
 results_df |> view()
 ```
 
+**Explore `NA` values.**
+
+Let's explore any `NA` values in the three dataframes.
+```{r explore_gbb_na, eval = FALSE}
+# Are there NA values in bakers_df?
+bakers_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+
+# Are there NA values in bakes_df?
+bakes_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+
+# Are there NA values in results_df?
+results_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+```
+
+Based on the outputs of the code chunk above, we can see that `bakers_df` does not have any `NA` values. The `bakes_df` has `NA` values in the `show_stopper` column, and I'm not sure why. And `results_df` has hundreds of `NA` values throughout the `technical` and `results` columns, but I assume this is because the contestant was eliminated in a previous episode.
+
+**Pre-join QAQC for `bakes_df` and `results_df`.**
+
+To better understand the `NA` values in `bakes_df` and `results_df`, let's join the two together. Hopefully, some of the puzzle pieces will come together. First, let's do a little QA/QC to make sure the join will go smoothly.
+```{r qaqc_bakes_results_1}
+# Are there any bakers in bakes_df that are not in results_df?
+bakes_df |> 
+  anti_join(results_df, by = c("series", "episode", "baker")) |> 
+  distinct(baker) |> 
+  pull(baker)
+```
+
+There is one baker, "Jo", who is in `bakes_df` but not `results_df`. After some googling, I see that "Jo" in `bakes_df` is the same person as "Joanne" in `results_df` and "Jo Wheatly" in `bakers_df`. Let's sort that out and make sure she's "Joanne Wheatly" across all datasets.
+```{r qaqc_joanne}
+# Mutate bakers_df
+bakers_df = bakers_df |> 
+  mutate(
+    baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly")
+  )
+
+# Mutate bakes_df
+bakes_df = bakes_df |> 
+  mutate(
+    baker = recode(baker, "\"Jo\"" = "Joanne")
+  )
+
+# No need to mutate results_df
+```
+
+Let's continue the QA/QC.
+```{r qaqc_bakes_results_2}
+# Are there any bakers in results_df that are not in bakes_df?
+results_df |> 
+  anti_join(bakes_df, by = c("series", "episode", "baker")) |> 
+  distinct(series, baker) |> 
+  pull(baker)
+```
+
+Yikes! There are a lot of bakers in `results_df` that do not have a match with rows in `bakes_df`. I'll take another look.
+```{r qaqc_bakes_results_3, eval = FALSE}
+results_df |> 
+  anti_join(bakes_df, by = c("series", "episode", "baker")) |> 
+  view()
+```
+
+The list of names grows by each episode, starting from episode 2. It looks many (but not all) of these names are of contestants who were previously eliminated in the show. Let's move forward with joining joining `bakes_df` and `results_df` and filter out unneeded rows from there as we see fit.
+```{r join_bakes_results}
+bakes_results_df = bakes_df |> 
+  full_join(results_df, by = c("series", "episode", "baker")) |>
+  arrange(series, baker, episode)
+```
+
+First, let's filter out any rows that indicate that a contestant has been previously eliminated. 
+```{r}
+bakes_results_df = bakes_results_df |> 
+  filter(
+    !(is.na(signature_bake) & is.na(show_stopper) & is.na(technical) & is.na(result))
+  )
+```
+
+
+
+
+
+
+```{r}
+# Assign missing bakers' names to a list
+missing_bakes = results_df |> 
+  full_join(bakes_df, by = c("series", "episode", "baker")) |> 
+  distinct(series, baker) |> 
+  arrange(series, baker)
+
+# Filter only results for those names
+bakes_results_df |> 
+  filter(baker %in% pull(missing_bakes, baker)) |> 
+  view()
+
+```
+
+
+
+
+
+
+
+
+
+
+**Prep `bakers_df` for joining with `bakes_results_df`.**
 
 In `bakes_df` and `results_df`, the bakers' names are stored as just their first names. In `bakers_df`, the bakers' _full_ names are saved in one column, so I'll separate that `baker_name` column into two separate columns for first name and last name. This will make it easier to join `bakers_df` with the other dataframes in the future.
 ```{r clean_bakers}
@@ -273,66 +384,13 @@ bakers_df = bakers_df |>
   relocate(baker_firstname, baker_lastname)
 ```
 
-Let's explore any `NA` values in the three dataframes.
-```{r explore_gbb_na, eval = FALSE}
-# The bakers_df does not have any NA values
-bakers_df |> 
-  filter(if_any(everything(), is.na)) |> 
-  view()
-
-# The bakes_df has some NA values in the show_stopper column
-bakes_df |> 
-  filter(if_any(everything(), is.na)) |> 
-  view()
-
-# The results_df has many NA values in the technical and results columns
-results_df |> 
-  filter(if_any(everything(), is.na)) |> 
-  view()
-```
-
-Based on the outputs of the code chunk above, we can see that `bakers_df` does not have any `NA` values, `bakes_df` has `NA`s in the `show_stopper` column, and `results_df` has hundreds of `NA`s throughout the `technical` and `results` columns
-
-
-
-
-```{r qaqc_bakes_results, eval = FALSE}
-# Are there any bakers in bakes_df that are not in results_df?
-bakes_df |> 
-  anti_join(results_df, by = c("series", "episode", "baker")) |> 
-  distinct(baker)
-
-# Are there any bakers in results_df that are not in bakes_df?
-results_df |> 
-  anti_join(bakes_df, by = c("series", "episode", "baker")) |> 
-  distinct(series, baker)
-
-
-
-
-
-```
 
 
 
 
 
 ```{r, eval = FALSE}
-bakes_df |> 
-  full_join(results_df, by = c("series", "episode", "baker")) |>
-  arrange(series, baker, episode) |> 
-  view()
 
-
-
-```
-
-
-
-```{r, eval = FALSE}
-  mutate(
-    baker = recode(baker, "\"Jo\"" = "Joanne")
-  )
 
 # Quality Control
 
