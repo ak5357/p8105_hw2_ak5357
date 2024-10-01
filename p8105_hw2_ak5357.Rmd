@@ -222,23 +222,173 @@ The resulting dataset contains **`r nrow(trash_wheels_df)`** observations--
 ### _Great British Bake Off_
 
 **Loading and cleaning the data.**
-````{r import_gbb_data}
-bakers_df = read_csv("data/gbb_datasets/bakers.csv") |> 
+
+Information about individual bakers, their bakes, and their performance is included in `bakers.csv`, `bakes.csv`, and `results.csv`. The following code chunks import these three datasets, cleans and organizes them, and merges them into a single dataset containing all the information.
+
+First, let's import the datasets.
+
+```{r import_gbb_data}
+# Bakers data
+bakers_df =
+  read_csv("data/gbb_datasets/bakers.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE) |> 
   janitor::clean_names()
 
-bakes_df = read_csv("data/gbb_datasets/bakes.csv") |> 
+# Bakes data
+bakes_df =
+  read_csv("data/gbb_datasets/bakes.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE) |> 
   janitor::clean_names()
 
-results_df = read_csv("data/gbb_datasets/results.csv", skip = 2) |> 
+# Results data
+results_df =
+  read_csv("data/gbb_datasets/results.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE,
+           skip = 2) |> 
   janitor::clean_names()
+```
 
-viewers_df = read_csv("data/gbb_datasets/viewers.csv") |> 
-  janitor::clean_names()
+
+First, let's take a quick look at each dataframe.
+```{r view_gbb_dfs, eval = FALSE}
+# View each table
+bakers_df |> view()
+bakes_df |> view()
+results_df |> view()
+```
+
+
+In `bakes_df` and `results_df`, the bakers' names are stored as just their first names. In `bakers_df`, the bakers' _full_ names are saved in one column, so I'll separate that `baker_name` column into two separate columns for first name and last name. This will make it easier to join `bakers_df` with the other dataframes in the future.
+```{r clean_bakers}
+# Replace baker_name column with baker_firstname and baker_lastname columns
+bakers_df = bakers_df |> 
+  mutate(
+    baker_firstname = str_split(baker_name, " ", simplify = TRUE)[, 1],
+    baker_lastname = str_split(baker_name, " ", simplify = TRUE)[, 2]
+  ) |> 
+  select(-baker_name) |> 
+  relocate(baker_firstname, baker_lastname)
+```
+
+Let's explore any `NA` values in the three dataframes.
+```{r explore_gbb_na, eval = FALSE}
+# The bakers_df does not have any NA values
+bakers_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+
+# The bakes_df has some NA values in the show_stopper column
+bakes_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+
+# The results_df has many NA values in the technical and results columns
+results_df |> 
+  filter(if_any(everything(), is.na)) |> 
+  view()
+```
+
+Based on the outputs of the code chunk above, we can see that `bakers_df` does not have any `NA` values, `bakes_df` has `NA`s in the `show_stopper` column, and `results_df` has hundreds of `NA`s throughout the `technical` and `results` columns
+
+
+
+
+```{r qaqc_bakes_results, eval = FALSE}
+# Are there any bakers in bakes_df that are not in results_df?
+bakes_df |> 
+  anti_join(results_df, by = c("series", "episode", "baker")) |> 
+  distinct(baker)
+
+# Are there any bakers in results_df that are not in bakes_df?
+results_df |> 
+  anti_join(bakes_df, by = c("series", "episode", "baker")) |> 
+  distinct(series, baker)
+
+
+
+
+
+```
+
+
+
+
+
+```{r, eval = FALSE}
+bakes_df |> 
+  full_join(results_df, by = c("series", "episode", "baker")) |>
+  arrange(series, baker, episode) |> 
+  view()
+
+
+
+```
+
+
+
+```{r, eval = FALSE}
+  mutate(
+    baker = recode(baker, "\"Jo\"" = "Joanne")
+  )
+
+# Quality Control
+
+# Every baker must either be out, or must become the runner-up or winner
+
+
+
+
+
+# How many distinct numbers of "words" are in the bakers' names?
+  # If there are any bakers with more than two "words" in their names, str_split() may not work the way I want
+bakers_df |> 
+  mutate(
+    test = str_count(baker_name, " ")
+  ) |> 
+  distinct(test)
+
+# How many episodes are documented in the bakes table?
+bakes_df |> 
+  distinct(series, episode) |> 
+  nrow()
+
+
+
+
+
+
+
 
 
 bakers_df |> colnames()
 bakes_df |> colnames()
 results_df |> colnames()
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r import_viewers_data, eval = FALSE}
+
+
+viewers_df = read_csv("data/gbb_datasets/viewers.csv") |> 
+  janitor::clean_names()
+
+
 viewers_df |> colnames()
 
 
@@ -246,9 +396,6 @@ viewers_df |>
   pivot_longer(
     
   )
-
-
-
 
 ```
 
