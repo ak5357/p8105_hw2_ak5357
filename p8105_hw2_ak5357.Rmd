@@ -222,12 +222,11 @@ The resulting dataset contains **`r nrow(trash_wheels_df)`** observations--
 # Problem 3
 ### _Great British Bake Off_
 
-**Loading and cleaning the data.**
+**Loading the data.**
 
 Information about individual bakers, their bakes, and their performance is included in `bakers.csv`, `bakes.csv`, and `results.csv`. The following code chunks import these three datasets, cleans and organizes them, and merges them into a single dataset containing all the information.
 
 First, let's import the datasets.
-
 ```{r import_gbb_data, message = FALSE}
 # Bakers data
 bakers_df =
@@ -261,7 +260,7 @@ bakes_df |> view()
 results_df |> view()
 ```
 
-**Explore `NA` values.**
+**Cleaning the data.**
 
 Let's explore any `NA` values in the three dataframes.
 ```{r explore_gbb_na, eval = FALSE}
@@ -281,11 +280,15 @@ results_df |>
   view()
 ```
 
-Based on the outputs of the code chunk above, we can see that `bakers_df` does not have any `NA` values. The `bakes_df` has `NA` values in the `show_stopper` column, and I'm not sure why. And `results_df` has hundreds of `NA` values throughout the `technical` and `results` columns, but I assume this is because the contestant was eliminated in a previous episode.
+Based on the outputs of the code chunk above, we can see that
 
-**Pre-join QAQC for `bakes_df` and `results_df`.**
+* `bakers_df` does not have any `NA` values
+* `bakes_df` has `NA` values in the `show_stopper` column
+* `results_df` has hundreds of `NA` values throughout the `technical` and `results` columns (possibly reflecting the null scores of previously eliminated contestants)
 
-To better understand the `NA` values in `bakes_df` and `results_df`, let's join the two together. Hopefully, some of the puzzle pieces will come together. First, let's do a little QA/QC to make sure the join will go smoothly.
+**QAQC for `bakes_df` and `results_df`.**
+
+Before joining the three datasets, let's do some QA/QC to ensure the joins will go smoothly. First, let's compare the data in `bakes_df` and `results_df`.
 ```{r qaqc_bakes_results_1}
 # Are there any bakers in bakes_df that are not in results_df?
 bakes_df |> 
@@ -294,19 +297,15 @@ bakes_df |>
   pull(baker)
 ```
 
-There is one baker, "Jo", who is in `bakes_df` but not `results_df`. After some googling, I see that "Jo" in `bakes_df` is the same person as "Joanne" in `results_df` and "Jo Wheatly" in `bakers_df`. Let's sort that out and make sure she's "Joanne Wheatly" across all datasets.
+It appears the contestant _"Jo"_ is present in `bakes_df` but not `results_df`. After some Googling, I see that _"Jo"_ in `bakes_df` is the same person as _Joanne_ in `results_df` and _Jo Wheatly_ in `bakers_df`. Let's standardize her name across all datasets to be _Joanne Wheatly_.
 ```{r qaqc_joanne}
 # Mutate bakers_df
 bakers_df = bakers_df |> 
-  mutate(
-    baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly")
-  )
+  mutate(baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly"))
 
 # Mutate bakes_df
 bakes_df = bakes_df |> 
-  mutate(
-    baker = recode(baker, "\"Jo\"" = "Joanne")
-  )
+  mutate(baker = recode(baker, "\"Jo\"" = "Joanne"))
 
 # No need to mutate results_df
 ```
@@ -320,59 +319,47 @@ results_df |>
   pull(baker)
 ```
 
-Yikes! There are a lot of bakers in `results_df` that do not have a match with rows in `bakes_df`. I'll take another look.
-```{r qaqc_bakes_results_3, eval = FALSE}
-results_df |> 
-  anti_join(bakes_df, by = c("series", "episode", "baker")) |> 
-  view()
-```
-
-The list of names grows by each episode, starting from episode 2. It looks many (but not all) of these names are of contestants who were previously eliminated in the show. Let's move forward with joining joining `bakes_df` and `results_df` and filter out unneeded rows from there as we see fit.
+There are many bakers in `results_df` that do not have a match with rows in `bakes_df`. After looking closer using the `view()` function, it appears that many (but not all) of these names are of previously eliminated contestants. Let's move forward with joining joining `bakes_df` and `results_df` and filter out unnecessary rows (null results of eliminated contestants) from there.
 ```{r join_bakes_results}
 bakes_results_df = bakes_df |> 
-  full_join(results_df, by = c("series", "episode", "baker")) |>
-  arrange(series, baker, episode)
-```
-
-First, let's filter out any rows that indicate that a contestant has been previously eliminated. 
-```{r}
-bakes_results_df = bakes_results_df |> 
+  full_join(results_df, by = c("series", "episode", "baker")) |> 
   filter(
     !(is.na(signature_bake) & is.na(show_stopper) & is.na(technical) & is.na(result))
-  )
+  ) |>
+  arrange(series, baker, episode)
+
+bakes_results_df |> head(10)
 ```
 
-
-
-
-
-
-```{r}
-# Assign missing bakers' names to a list
-missing_bakes = results_df |> 
-  full_join(bakes_df, by = c("series", "episode", "baker")) |> 
-  distinct(series, baker) |> 
-  arrange(series, baker)
-
-# Filter only results for those names
+There are still some rows with missing data. There are two sources for these `NA` values.
+```{r view_bakes_results_nas, eval = FALSE}
 bakes_results_df |> 
-  filter(baker %in% pull(missing_bakes, baker)) |> 
+  filter(if_any(everything(), is.na)) |> 
+  arrange(series, episode) |> 
   view()
-
 ```
 
+1. Series 1-8: There are some `NA` values here and there, wherever there is missing data for the `signature_bake` or `show_stopper` columns.
+2. Series 9-10: There is no data at all for the `signature_bake` or `show_stopper` columns.
+```{r bakes_results_series_difference}
+# Bakes_df only documents Series 1-8
+bakes_df |> 
+  distinct(series) |> 
+  pull(series)
 
+# results_df documents series 1-10
+results_df |> 
+  distinct(series) |> 
+  pull(series)
+```
 
+Both of these missing data causes are out of my control, so let's move on with joining the datasets.
 
-
-
-
-
-
+_Side note: For further QA/QC, I could check to make sure each baker has a singular show-ending (just one instance of "OUT", "Runner-up", or "WINNER") and that the episode where they have that result is the last one in their respective series where they have non-`NA` values. However, if I were to discover errors there, those would also be somewhat out of my control, so I don't see a point in going down that road. As such, let's move on._
 
 **Prep `bakers_df` for joining with `bakes_results_df`.**
 
-In `bakes_df` and `results_df`, the bakers' names are stored as just their first names. In `bakers_df`, the bakers' _full_ names are saved in one column, so I'll separate that `baker_name` column into two separate columns for first name and last name. This will make it easier to join `bakers_df` with the other dataframes in the future.
+In `bakes_df` and `results_df` (now joined as `bakes_results_df`), the bakers' names are stored as just their first names. In `bakers_df`, the bakers' _full_ names are saved in a single column, so let's separate that `baker_name` column into two separate columns for first name and last name. This will make it easier to join `bakers_df` with `bakes_results_df` in the future.
 ```{r clean_bakers}
 # Replace baker_name column with baker_firstname and baker_lastname columns
 bakers_df = bakers_df |> 
@@ -384,53 +371,74 @@ bakers_df = bakers_df |>
   relocate(baker_firstname, baker_lastname)
 ```
 
+**Finish joining the three datasets.**
 
+I'm choosing to join the datasets in this order because I want the contestants' personal information columns to be at the end, since the focus here is on their baking.
+```{r join_all_gbb}
+gbb_df = bakes_results_df |> 
+  full_join(bakers_df, by = c("series", "baker" = "baker_firstname")) |>
+  rename(baker_firstname = baker) |> 
+  arrange(series, baker_firstname, baker_lastname, episode) |> 
+  relocate(series, episode, baker_firstname, baker_lastname)
+```
 
-
-
-
-```{r, eval = FALSE}
-
-
-# Quality Control
-
-# Every baker must either be out, or must become the runner-up or winner
-
-
-
-
-
-# How many distinct numbers of "words" are in the bakers' names?
-  # If there are any bakers with more than two "words" in their names, str_split() may not work the way I want
-bakers_df |> 
-  mutate(
-    test = str_count(baker_name, " ")
-  ) |> 
-  distinct(test)
-
-# How many episodes are documented in the bakes table?
-bakes_df |> 
-  distinct(series, episode) |> 
-  nrow()
-
-
-
-
-
-
-
-
-
-bakers_df |> colnames()
-bakes_df |> colnames()
-results_df |> colnames()
-
-
-
-
+**Export Final Dataset**
+```{r}
+# Export csv
+write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
 
+
+**Process summary.**
+
+That was a long process. In my final code, I would have done it like so:
+```{r gbb_data_wrangling_summary, eval = FALSE}
+# Import Bakers data
+bakers_df =
+  read_csv("data/gbb_datasets/bakers.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE) |> 
+  janitor::clean_names()|> 
+  mutate( #add firstname and lastname columns & fix Joanne naming issue
+    baker_firstname = str_split(baker_name, " ", simplify = TRUE)[, 1],
+    baker_lastname = str_split(baker_name, " ", simplify = TRUE)[, 2],
+    baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly")
+  ) |> 
+  select(-baker_name) |> #remove redundant fullname column
+  relocate(baker_firstname, baker_lastname) #place name columns at front
+
+
+# Import Bakes data
+bakes_df =
+  read_csv("data/gbb_datasets/bakes.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE) |> 
+  janitor::clean_names() |> 
+  mutate(baker = recode(baker, "\"Jo\"" = "Joanne")) #fix Joanne naming issue
+
+# Import Results data
+results_df =
+  read_csv("data/gbb_datasets/results.csv",
+           na = c("", " ", "N/A", "NA", "UNKNOWN"),
+           trim_ws = TRUE,
+           skip = 2) |> 
+  janitor::clean_names()
+
+# Join dataframes
+gbb_df = bakes_df |> 
+  full_join(results_df, by = c("series", "episode", "baker")) |> 
+  filter( #remove all rows that represent previously eliminated contestants
+    !(is.na(signature_bake) & is.na(show_stopper) & is.na(technical) & is.na(result))
+  ) |> 
+  full_join(bakers_df, by = c("series", "baker" = "baker_firstname")) |>
+  rename(baker_firstname = baker) |> 
+  arrange(series, baker_firstname, baker_lastname, episode) |> 
+  relocate(series, episode, baker_firstname, baker_lastname)
+
+# Export csv
+write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
+```
 
 
 
