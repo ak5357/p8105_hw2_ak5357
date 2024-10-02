@@ -348,7 +348,7 @@ It appears the contestant _"Jo"_ is present in `bakes_df` but not `results_df`. 
 ```{r qaqc_joanne}
 # Mutate bakers_df
 bakers_df = bakers_df |> 
-  mutate(baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly"))
+  mutate(baker_name = recode(baker_name, "Jo Wheatley" = "Joanne Wheatley"))
 
 # Mutate bakes_df
 bakes_df = bakes_df |> 
@@ -447,9 +447,9 @@ bakers_df =
            trim_ws = TRUE) |> 
   janitor::clean_names()|> 
   mutate( #add firstname and lastname columns & fix Joanne naming issue
+    baker_name = recode(baker_name, "Jo Wheatley" = "Joanne Wheatley"),
     baker_firstname = str_split(baker_name, " ", simplify = TRUE)[, 1],
-    baker_lastname = str_split(baker_name, " ", simplify = TRUE)[, 2],
-    baker_name = recode(baker_name, "Jo Wheatly" = "Joanne Wheatly")
+    baker_lastname = str_split(baker_name, " ", simplify = TRUE)[, 2]
   ) |> 
   select(-baker_name) |> #remove redundant fullname column
   relocate(baker_firstname, baker_lastname) #place name columns at front
@@ -463,7 +463,7 @@ bakes_df =
   mutate(baker = recode(baker, "\"Jo\"" = "Joanne")) #fix Joanne naming issue
 
 # Import Results data
-results_df =
+`results_df` =
   read_csv("data/gbb_datasets/results.csv",
            na = c("", " ", "N/A", "NA", "UNKNOWN"),
            trim_ws = TRUE,
@@ -473,9 +473,7 @@ results_df =
 # Join dataframes
 gbb_df = bakes_df |> 
   full_join(results_df, by = c("series", "episode", "baker")) |> 
-  filter( #remove all rows that represent previously eliminated contestants
-    !(is.na(signature_bake) & is.na(show_stopper) & is.na(technical) & is.na(result))
-  ) |> 
+  drop_na(result) |> #remove all rows that represent previously eliminated contestants
   full_join(bakers_df, by = c("series", "baker" = "baker_firstname")) |>
   rename(baker_firstname = baker) |> 
   arrange(series, baker_firstname, baker_lastname, episode) |> 
@@ -486,14 +484,6 @@ write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
 **Answering questions with data.**
-
-```{r}
-repeat_names = gbb_df |> 
-  distinct(series, baker_firstname) |> 
-  group_by(baker_firstname) |> 
-  summarise(count = n()) |> 
-  filter(count > 1)
-```
 
 ```{r}
 gbb_summary_df = 0
@@ -507,15 +497,24 @@ gbb_df |>
   relocate(series_episode, baker_fullname) |> 
   group_by(series) |> 
   summarise(
-    star_baker = paste(baker_fullname[which(result == "STAR BAKER")], "STAR BAKER"),
-    winner = paste(baker_fullname[which(result == "WINNER")], "WINNER")
-  ) |> 
-  view()
-  
+    star_baker = paste(baker_fullname[which(result == "STAR BAKER")], "STAR BAKER")
+  )
+
+
+gbb_df |> 
+  filter(result %in% c("STAR BAKER", "WINNER")) |>
+  select(series, episode, baker_firstname, baker_lastname, result)
+
+
+#knitr::kable()
+
   
 gbb_df |> 
   select(result) |> 
   distinct()
+
+
+gbb_df |> dim()
 
 ```
 
