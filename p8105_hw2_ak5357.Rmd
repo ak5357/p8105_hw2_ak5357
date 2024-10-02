@@ -331,7 +331,7 @@ bakes_results_df = bakes_df |>
 bakes_results_df |> head(10)
 ```
 
-There are still some rows with missing data. There are two sources for these `NA` values.
+There are still some rows with missing data. Upon examining the output of the code chunk below, it seems there are two sources for these `NA` values.
 ```{r view_bakes_results_nas, eval = FALSE}
 bakes_results_df |> 
   filter(if_any(everything(), is.na)) |> 
@@ -342,7 +342,7 @@ bakes_results_df |>
 1. Series 1-8: There are some `NA` values here and there, wherever there is missing data for the `signature_bake` or `show_stopper` columns.
 2. Series 9-10: There is no data at all for the `signature_bake` or `show_stopper` columns.
 ```{r bakes_results_series_difference}
-# Bakes_df only documents Series 1-8
+# bakes_df only documents Series 1-8
 bakes_df |> 
   distinct(series) |> 
   pull(series)
@@ -355,7 +355,7 @@ results_df |>
 
 Both of these missing data causes are out of my control, so let's move on with joining the datasets.
 
-_Side note: For further QA/QC, I could check to make sure each baker has a singular show-ending (just one instance of "OUT", "Runner-up", or "WINNER") and that the episode where they have that result is the last one in their respective series where they have non-`NA` values. However, if I were to discover errors there, those would also be somewhat out of my control, so I don't see a point in going down that road. As such, let's move on._
+_Side note: For further QA/QC, I could check to make sure each baker has a singular show-ending (just one instance of "OUT", "Runner-up", or "WINNER") and that the episode where they have that result is the last one in their respective series where they have non-`NA` values. However, if I were to discover errors there, those would also be somewhat out of my control, so I don't see a point in going down that road._
 
 **Prep `bakers_df` for joining with `bakes_results_df`.**
 
@@ -389,10 +389,9 @@ write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
 
-
 **Process summary.**
 
-That was a long process. In my final code, I would have done it like so:
+That was a long process. In my final code, I would have done it as shown below, all in one go.
 ```{r gbb_data_wrangling_summary, eval = FALSE}
 # Import Bakers data
 bakers_df =
@@ -407,7 +406,6 @@ bakers_df =
   ) |> 
   select(-baker_name) |> #remove redundant fullname column
   relocate(baker_firstname, baker_lastname) #place name columns at front
-
 
 # Import Bakes data
 bakes_df =
@@ -440,32 +438,64 @@ gbb_df = bakes_df |>
 write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
+**Answering questions with data.**
 
+```{r}
+repeat_names = gbb_df |> 
+  distinct(series, baker_firstname) |> 
+  group_by(baker_firstname) |> 
+  summarise(count = n()) |> 
+  filter(count > 1)
+```
 
+**Process viewership data.**
 
-
-
-
-
-
-```{r import_viewers_data, eval = FALSE}
-
-
+The following code chunk will import, clean, tidy, and organize the viewership data in `viewers.csv`.
+```{r import_viewers_data, message = FALSE}
+# Import, clean, and tidy viewership data
 viewers_df = read_csv("data/gbb_datasets/viewers.csv") |> 
-  janitor::clean_names()
-
-
-viewers_df |> colnames()
-
-
-viewers_df |> 
-  pivot_longer(
-    
-  )
-
+  janitor::clean_names() |> 
+  pivot_longer( #tidy data from redundant series columns
+    cols = starts_with("series"),
+    names_to = "series",
+    values_to = "rating",
+    names_prefix = "series_"
+  ) |> 
+  mutate(series = as.numeric(series)) |> 
+  relocate(series) |> 
+  arrange(series, episode) |> #sort by series and episode
+  filter(!is.na(rating)) #filter out non-existent episodes
 ```
 
 
+```{r}
+# Show the first 10 rows of viewers_df
+viewers_df |> head(10)
+```
 
+**Answering questions with data.**
+```{r gbb_view_summary}
+# Viewership summary table
+view_summary = viewers_df |> 
+  group_by(series) |> 
+  summarise(
+    average_rating = mean(rating),
+    highest_episode = episode[which.max(rating)],
+    highest_rating = max(rating)
+  )
 
+# View summary table
+view_summary
 
+# Series 1 average viewership
+s1_avg_viewership = view_summary |> 
+  filter(series == 1) |> 
+  pull(average_rating)
+
+# Series 5 average viewership
+s5_avg_viewership = view_summary |> 
+  filter(series == 5) |> 
+  pull(average_rating)
+```
+
+The table above shows the average viewership, highest-rated episode, and highest rating received by each season. The average viewership in Season 1 was `r s1_avg_viewership`. The average viewership in Season 5 was `r s5_avg_viewership`.
