@@ -495,6 +495,39 @@ repeat_names = gbb_df |>
   filter(count > 1)
 ```
 
+```{r}
+gbb_summary_df = 0
+
+
+gbb_df |> 
+  mutate(
+    baker_fullname = paste(baker_firstname, baker_lastname),
+    series_episode = paste(series, episode)
+    ) |> 
+  relocate(series_episode, baker_fullname) |> 
+  group_by(series) |> 
+  summarise(
+    star_baker = paste(baker_fullname[which(result == "STAR BAKER")], "STAR BAKER"),
+    winner = paste(baker_fullname[which(result == "WINNER")], "WINNER")
+  ) |> 
+  view()
+  
+  
+gbb_df |> 
+  select(result) |> 
+  distinct()
+
+```
+
+
+
+
+
+
+
+
+
+
 **Process viewership data.**
 
 The following code chunk will import, clean, tidy, and organize the viewership data in `viewers.csv`.
