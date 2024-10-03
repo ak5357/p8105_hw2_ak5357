@@ -216,13 +216,18 @@ trash_key_var_summary = trash_wheels_df |>
   summarise(
     first_date = min(date, na.rm = TRUE),
     dumpster_count = n_distinct(dumpster, na.rm = TRUE),
-    total_vol = sum(volume_cubic_yards, na.rm = TRUE),
-    max_vol = max(volume_cubic_yards, na.rm = TRUE),
+    total_volume = sum(volume_cubic_yards, na.rm = TRUE),
+    max_volume = max(volume_cubic_yards, na.rm = TRUE),
     total_weight = sum(weight_tons, na.rm = TRUE),
     max_weight = max(weight_tons, na.rm = TRUE)
   ) |> 
   arrange(first_date)
 
+# Reformat column names
+colnames(trash_key_var_summary) = 
+  str_to_title(str_replace_all(colnames(trash_key_var_summary), "_", " "))
+
+# Output reader-friendly table
 knitr::kable(trash_key_var_summary)
 ```
 
@@ -246,6 +251,11 @@ trash_other_var_summary = trash_wheels_df |>
   arrange(first_date) |> 
   select(-first_date)
 
+# Reformat column names
+colnames(trash_other_var_summary) = 
+  str_to_title(str_replace_all(colnames(trash_other_var_summary), "_", " "))
+
+# Output reader-friendly table
 knitr::kable(trash_other_var_summary)
 ```
 
@@ -348,7 +358,7 @@ bakes_df |>
   pull(baker)
 ```
 
-It appears the contestant _"Jo"_ is present in `bakes_df` but not `results_df`. After some Googling, I see that _"Jo"_ in `bakes_df` is the same person as _Joanne_ in `results_df` and _Jo Wheatly_ in `bakers_df`. Let's standardize her name across all datasets to be _Joanne Wheatly_.
+It appears the contestant _"Jo"_ is present in `bakes_df` but not `results_df`. After some Googling, I see that _"Jo"_ in `bakes_df` is the same person as _Joanne_ in `results_df` and _Jo Wheatley_ in `bakers_df`. Let's standardize her name across all datasets to be _Joanne Wheatley_.
 ```{r qaqc_joanne}
 # Mutate bakers_df
 bakers_df = bakers_df |> 
@@ -370,20 +380,37 @@ results_df |>
   pull(baker)
 ```
 
-There are many bakers in `results_df` that do not have a match with rows in `bakes_df`. After looking closer using the `view()` function, it appears that many (but not all) of these names are of previously eliminated contestants. Let's move forward with joining joining `bakes_df` and `results_df` and filter out unnecessary rows (null results of eliminated contestants) from there.
+There are many bakers in `results_df` that do not have a match with rows in `bakes_df`. After looking closer using the `view()` function, it appears that many (but not all) of these names are of previously eliminated contestants. Let's move forward with joining joining `bakes_df` and `results_df` and filter out unnecessary rows (null results of eliminated contestants) from there. The code below also mutates the `show_stopper` and `signature_bake` columns to improve readability wherever there are entries with multiple baked items.
 ```{r join_bakes_results}
+# Full join on bakes_df and results_df
 bakes_results_df = bakes_df |> 
   full_join(results_df, by = c("series", "episode", "baker")) |> 
   filter(
     !(is.na(signature_bake) & is.na(show_stopper) & is.na(technical) & is.na(result))
   ) |>
-  arrange(series, baker, episode)
+  arrange(series, baker, episode) |> 
+  mutate( #improving readability wherever there are multiple dishes in one entry
+    show_stopper = gsub("\n", " / ", show_stopper),
+    signature_bake = gsub("\n", " / ", signature_bake),
+    show_stopper = gsub("([a-z])([A-Z])", "\\1 / \\2", show_stopper),
+    signature_bake = gsub("([a-z])([A-Z])", "\\1 / \\2", signature_bake),
+    show_stopper = gsub("and /", "and", show_stopper),
+    signature_bake = gsub("and /", "and", signature_bake),
+    show_stopper = gsub("with /", "with", show_stopper),
+    signature_bake = gsub("with /", "with", signature_bake),
+    show_stopper = gsub("/ with", "with", show_stopper),
+    signature_bake = gsub("/ with", "with", signature_bake),
+    show_stopper = gsub("/ \\(", "\\(", show_stopper),
+    signature_bake = gsub("/ \\(", "\\(", signature_bake)
+  )
 
+# Show first 10 rows
 bakes_results_df |> head(10)
 ```
 
 There are still some rows with missing data. Upon examining the output of the code chunk below, it seems there are two sources for these `NA` values.
 ```{r view_bakes_results_nas, eval = FALSE}
+# Show all rows with any NA values
 bakes_results_df |> 
   filter(if_any(everything(), is.na)) |> 
   arrange(series, episode) |> 
@@ -435,8 +462,7 @@ gbb_df = bakes_results_df |>
 
 **Export Final Dataset**
 
-# BRIEFLY DISCUSS FINAL DATASET
-
+The final dataset contains information about all bakers, bakes, and results in Series 1-8 of the Great British Bake Off show. For Series 9-10, it contains information about bakers and results. Through the process detailed above, I have removed all entries representing previously eliminated characters, improved readability in the bakes columns, and sorted the columns and rows for better readability.
 ```{r}
 # Export csv
 write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
@@ -444,7 +470,7 @@ write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 
 **Process summary.**
 
-That was a long process. In my final code, I would have done it as shown below, all in one go.
+That was a long process. In my final code, I would do it as shown below, all in one go.
 ```{r gbb_data_wrangling_summary, eval = FALSE}
 # Import Bakers data
 bakers_df =
@@ -466,10 +492,24 @@ bakes_df =
            na = c("", " ", "N/A", "NA", "UNKNOWN"),
            trim_ws = TRUE) |> 
   janitor::clean_names() |> 
-  mutate(baker = recode(baker, "\"Jo\"" = "Joanne")) #fix Joanne naming issue
+  mutate(baker = recode(baker, "\"Jo\"" = "Joanne")) |> #fix Joanne naming issue 
+  mutate( #improving readability wherever there are multiple dishes in one entry
+    show_stopper = gsub("\n", " / ", show_stopper),
+    signature_bake = gsub("\n", " / ", signature_bake),
+    show_stopper = gsub("([a-z])([A-Z])", "\\1 / \\2", show_stopper),
+    signature_bake = gsub("([a-z])([A-Z])", "\\1 / \\2", signature_bake),
+    show_stopper = gsub("and /", "and", show_stopper),
+    signature_bake = gsub("and /", "and", signature_bake),
+    show_stopper = gsub("with /", "with", show_stopper),
+    signature_bake = gsub("with /", "with", signature_bake),
+    show_stopper = gsub("/ with", "with", show_stopper),
+    signature_bake = gsub("/ with", "with", signature_bake),
+    show_stopper = gsub("/ \\(", "\\(", show_stopper),
+    signature_bake = gsub("/ \\(", "\\(", signature_bake)
+  )
 
 # Import Results data
-`results_df` =
+results_df =
   read_csv("data/gbb_datasets/results.csv",
            na = c("", " ", "N/A", "NA", "UNKNOWN"),
            trim_ws = TRUE,
@@ -490,20 +530,32 @@ write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
 **Answering questions with data.**
+
+The table below shows the star baker and winner of each episode and series. Since I have never watched the show, I can't speak to the baking talents or abilities or each contestant, so I'm not sure whose win is surprising and whose is not, but I will make some guesses anyway.
+
+For surprise wins, I will say that Nancy Birtwhistle made quite a comeback in Series 1, earning the Star Baker result only once, in the very first episode, and then staying under the radar until the final episode where she emerged the Series 1 winner. David Atherton had a similar story in Series 10.
+
+As for predictable overall winners, I would say that Nadia Hussain and Candice Brown from Series 6 and 7, respectively, "took the cake" for that title. In Series 6, Nadia dominated the Star Baker award for the two episodes leading up to the Series finale, so it's no shocker that she won that Series. Series 7's Candice Brown also performed consistently well, earning two Star Bakers before her final Win.
 ```{r gbb_winners_summary}
 # Create table showing star baker/winner from each episode
-gbb_winners = gbb_df |> 
+gbb_winners_df = gbb_df |> 
   filter(
     result %in% c("STAR BAKER", "WINNER"), #keep only star baker/winner results
     series >= 5 #keep only series 5-10
     ) |>
+  mutate(
+    result = stringr::str_to_title(result)
+  ) |> 
   select(series, episode, baker_firstname, baker_lastname, result) |> 
   arrange(series, episode)
 
+# Reformat column names
+colnames(gbb_winners_df) =
+  str_to_title(str_replace_all(colnames(gbb_winners_df), "_", " "))
 
-knitr::kable(gbb_winners)
+# Output reader-friendly table
+knitr::kable(gbb_winners_df)
 ```
-
 
 **Process viewership data.**
 
@@ -525,7 +577,7 @@ viewers_df = read_csv("data/gbb_datasets/viewers.csv") |>
 ```
 
 
-```{r}
+```{r preview_viewers_data}
 # Show the first 10 rows of viewers_df
 viewers_df |> head(10)
 ```
@@ -536,14 +588,16 @@ viewers_df |> head(10)
 view_summary = viewers_df |> 
   group_by(series) |> 
   summarise(
-    average_rating = mean(rating),
+    average_rating = round(mean(rating), 2),
     highest_episode = episode[which.max(rating)],
     highest_rating = max(rating)
   )
 
 # View summary table
-view_summary
+knitr::kable(view_summary)
+```
 
+```{r viewership_stats}
 # Series 1 average viewership
 s1_avg_viewership = view_summary |> 
   filter(series == 1) |> 
@@ -555,4 +609,4 @@ s5_avg_viewership = view_summary |>
   pull(average_rating)
 ```
 
-The table above shows the average viewership, highest-rated episode, and highest rating received by each season. The average viewership in Season 1 was `r s1_avg_viewership`. The average viewership in Season 5 was `r s5_avg_viewership`.
+The table above shows the average viewership, highest-rated episode, and highest rating received by each season. The average viewership in Season 1 was **`r s1_avg_viewership`**. The average viewership in Season 5 was **`r s5_avg_viewership`**.
