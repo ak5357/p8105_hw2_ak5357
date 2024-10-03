@@ -156,9 +156,9 @@ gwynnda_trash_df = sheet_to_df(trash_excel_filepath, "Gwynnda Trash Wheel") |>
 
 The following code chunk combines the three trash dataframes, while performing the following operations as well:
 
-* removing empty and "total" rows that came from the bottom of the original spreadsheets
-* correcting the data types of `dumpster` and `wheel_name` to numeric and factor, respectively
-* re-ordering the columns in a useful way, prioritizing the variables in this order: identifiers, temporal, quantifiers, other
+* Removing empty and "total" rows that came from the bottom of the original spreadsheets.
+* Correcting the data types of `dumpster` and `wheel_name` to numeric and factor, respectively.
+* Re-ordering the columns in a useful way, prioritizing the variables in this order: identifiers, temporal, quantifiers, other.
 
 ```{r combine_trash_dfs}
 # Combine all trash wheels data
@@ -211,7 +211,7 @@ The resulting dataset contains **`r nrow(trash_wheels_df)`** observations. Of th
 
 ```{r trash_summary_key_variables}
 # Summary table of key variables
-trash_wheels_df |> 
+trash_key_var_summary = trash_wheels_df |> 
   group_by(wheel_name) |> 
   summarise(
     first_date = min(date, na.rm = TRUE),
@@ -222,13 +222,15 @@ trash_wheels_df |>
     max_weight = max(weight_tons, na.rm = TRUE)
   ) |> 
   arrange(first_date)
+
+knitr::kable(trash_key_var_summary)
 ```
 
 Other variables included in the dataset are litter types (ie. plastic bottles, polystyrene, cigarette butts, glass bottles, plastic bags, wrappers, sports balls) and homes powered. The following summary table shows sums of each litter type collected and sums of homes powered.
 
 ```{r trash_summary_other_variables}
 # Summary table of other variables
-trash_wheels_df |> 
+trash_other_var_summary = trash_wheels_df |> 
   group_by(wheel_name) |> 
   summarise(
     first_date = min(date, na.rm = TRUE),
@@ -243,6 +245,8 @@ trash_wheels_df |>
   ) |> 
   arrange(first_date) |> 
   select(-first_date)
+
+knitr::kable(trash_other_var_summary)
 ```
 
 **Answering questions with data.**
@@ -430,11 +434,13 @@ gbb_df = bakes_results_df |>
 ```
 
 **Export Final Dataset**
+
+# BRIEFLY DISCUSS FINAL DATASET
+
 ```{r}
 # Export csv
 write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
-
 
 **Process summary.**
 
@@ -484,47 +490,19 @@ write_csv(gbb_df, "data/gbb_datasets/gbb_processed_dataset.csv")
 ```
 
 **Answering questions with data.**
-
-```{r}
-gbb_summary_df = 0
-
-
-gbb_df |> 
-  mutate(
-    baker_fullname = paste(baker_firstname, baker_lastname),
-    series_episode = paste(series, episode)
-    ) |> 
-  relocate(series_episode, baker_fullname) |> 
-  group_by(series) |> 
-  summarise(
-    star_baker = paste(baker_fullname[which(result == "STAR BAKER")], "STAR BAKER")
-  )
+```{r gbb_winners_summary}
+# Create table showing star baker/winner from each episode
+gbb_winners = gbb_df |> 
+  filter(
+    result %in% c("STAR BAKER", "WINNER"), #keep only star baker/winner results
+    series >= 5 #keep only series 5-10
+    ) |>
+  select(series, episode, baker_firstname, baker_lastname, result) |> 
+  arrange(series, episode)
 
 
-gbb_df |> 
-  filter(result %in% c("STAR BAKER", "WINNER")) |>
-  select(series, episode, baker_firstname, baker_lastname, result)
-
-
-#knitr::kable()
-
-  
-gbb_df |> 
-  select(result) |> 
-  distinct()
-
-
-gbb_df |> dim()
-
+knitr::kable(gbb_winners)
 ```
-
-
-
-
-
-
-
-
 
 
 **Process viewership data.**
